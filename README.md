@@ -1,6 +1,6 @@
 The [fly.io distributed systems challenges](https://fly.io/dist-sys/) solved in Rust.
 
-Status is currently have solutions for the following challenges:
+Currently have solutions for the following challenges:
 [Echo](https://fly.io/dist-sys/1/), 
 [Unique ID Generation](https://fly.io/dist-sys/2/), and 
 [Broadcast](https://fly.io/dist-sys/3a/)
