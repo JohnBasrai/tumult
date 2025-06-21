@@ -36,8 +36,10 @@ impl Node<(), Payload> for UniqueNode
 
     fn step(&mut self, input: Event<Payload>, output: &mut StdoutLock) -> Result<()>
     {
-        let Event::Message(input) = input else {
-            panic!("got unexpected injected event: {:#?}", input);
+        let Event::Message(input) = input
+        else
+        {
+            panic!("got unexpected injected event: {input:#?}");
         };
 
         let mut reply = input.into_reply(Some(&mut self.id));

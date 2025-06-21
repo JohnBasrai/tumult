@@ -105,7 +105,9 @@ where
             .context("EOF before init message-2")?,
     )
     .context("Error deserializing init message")?;
-    let InitPayload::Init(init) = init_msg.body.payload else {
+    let InitPayload::Init(init) = init_msg.body.payload
+    else
+    {
         panic!("Expected init message first");
     };
     let mut node: N =
@@ -131,7 +133,7 @@ where
             let line = line.context("Maelstrom input from STDIN could not be read")?;
             let input: Message<P> = serde_json::from_str(&line)
                 .context("Maelstrom input from STDIN could not be deserialized")?;
-            if let Err(_) = tx.send(Event::Message(input))
+            if tx.send(Event::Message(input)).is_err()
             {
                 return Ok::<_, anyhow::Error>(());
             }
