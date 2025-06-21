@@ -12,65 +12,54 @@ use std::time::Duration;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
-enum Payload
-{
-    Broadcast
-    {
+enum Payload {
+    Broadcast {
         message: usize,
     },
     BroadcastOk,
     Read,
-    ReadOk
-    {
+    ReadOk {
         messages: HashSet<usize>,
     },
-    Topology
-    {
+    Topology {
         topology: HashMap<String, Vec<String>>,
     },
     TopologyOk,
-    Gossip
-    {
+    Gossip {
         seen: HashSet<usize>,
     },
 }
 
-enum InjectedPayload
-{
+enum InjectedPayload {
     Gossip,
 }
 
-struct BroadcastNode
-{
-    node:         String,
-    id:           usize,
-    messages:     HashSet<usize>,
-    known:        HashMap<String, HashSet<usize>>,
+struct BroadcastNode {
+    node: String,
+    id: usize,
+    messages: HashSet<usize>,
+    known: HashMap<String, HashSet<usize>>,
     neighborhood: Vec<String>,
 }
 
-impl Node<(), Payload, InjectedPayload> for BroadcastNode
-{
+impl Node<(), Payload, InjectedPayload> for BroadcastNode {
     fn from_init(
-        _state: (), init: Init, tx: Sender<Event<Payload, InjectedPayload>>,
-    ) -> Result<Self>
-    {
-        thread::spawn(move || {
-            loop
-            {
-                thread::sleep(Duration::from_millis(250));
-                if tx.send(Event::Injected(InjectedPayload::Gossip)).is_err()
-                {
-                    break;
-                }
+        _state: (),
+        init: Init,
+        tx: Sender<Event<Payload, InjectedPayload>>,
+    ) -> Result<Self> {
+        thread::spawn(move || loop {
+            thread::sleep(Duration::from_millis(250));
+            if tx.send(Event::Injected(InjectedPayload::Gossip)).is_err() {
+                break;
             }
         });
 
         Ok(Self {
-            node:         init.node_id,
-            id:           1,
-            messages:     HashSet::new(),
-            known:        init
+            node: init.node_id,
+            id: 1,
+            messages: HashSet::new(),
+            known: init
                 .node_ids
                 .into_iter()
                 .map(|nid| (nid, HashSet::new()))
@@ -80,20 +69,16 @@ impl Node<(), Payload, InjectedPayload> for BroadcastNode
     }
 
     fn step(
-        &mut self, input: Event<Payload, InjectedPayload>, output: &mut StdoutLock,
-    ) -> Result<()>
-    {
-        match input
-        {
-            Event::EOF =>
-            {}
+        &mut self,
+        input: Event<Payload, InjectedPayload>,
+        output: &mut StdoutLock,
+    ) -> Result<()> {
+        match input {
+            Event::EOF => {}
 
-            Event::Injected(payload) => match payload
-            {
-                InjectedPayload::Gossip =>
-                {
-                    for n in &self.neighborhood
-                    {
+            Event::Injected(payload) => match payload {
+                InjectedPayload::Gossip => {
+                    for n in &self.neighborhood {
                         let known_to_n = &self.known[n];
                         let (already_known, mut notify_of): (HashSet<_>, HashSet<_>) = self
                             .messages
@@ -110,12 +95,12 @@ impl Node<(), Payload, InjectedPayload> for BroadcastNode
                         }));
 
                         Message {
-                            src:  self.node.clone(),
+                            src: self.node.clone(),
                             dest: n.clone(),
                             body: Body {
-                                msg_id:      None,
+                                msg_id: None,
                                 in_reply_to: None,
-                                payload:     Payload::Gossip { seen: notify_of },
+                                payload: Payload::Gossip { seen: notify_of },
                             },
                         }
                         .send(&mut *output)
@@ -124,36 +109,30 @@ impl Node<(), Payload, InjectedPayload> for BroadcastNode
                 }
             },
 
-            Event::Message(input) =>
-            {
+            Event::Message(input) => {
                 let mut reply = input.into_reply(Some(&mut self.id));
-                match reply.body.payload
-                {
-                    Payload::Gossip { seen } =>
-                    {
+                match reply.body.payload {
+                    Payload::Gossip { seen } => {
                         self.known
                             .get_mut(&reply.dest)
                             .expect("got gossip msg from unknown node:{&reply.dest}")
                             .extend(seen.iter().copied());
                         self.messages.extend(seen);
                     }
-                    Payload::Broadcast { message } =>
-                    {
+                    Payload::Broadcast { message } => {
                         self.messages.insert(message);
                         reply.body.payload = Payload::BroadcastOk;
                         reply
                             .send(&mut *output)
                             .context("Error:sending broadcast")?;
                     }
-                    Payload::Read =>
-                    {
+                    Payload::Read => {
                         reply.body.payload = Payload::ReadOk {
                             messages: self.messages.clone(),
                         };
                         reply.send(&mut *output).context("read failure")?;
                     }
-                    Payload::Topology { mut topology } =>
-                    {
+                    Payload::Topology { mut topology } => {
                         self.neighborhood = topology
                             .remove(&self.node)
                             .unwrap_or_else(|| panic!("no topology for node {}", self.node));
@@ -162,8 +141,7 @@ impl Node<(), Payload, InjectedPayload> for BroadcastNode
                             .send(&mut *output)
                             .context("reply to topology error")?;
                     }
-                    Payload::BroadcastOk | Payload::ReadOk { .. } | Payload::TopologyOk =>
-                    {}
+                    Payload::BroadcastOk | Payload::ReadOk { .. } | Payload::TopologyOk => {}
                 }
             }
         }
@@ -171,4 +149,6 @@ impl Node<(), Payload, InjectedPayload> for BroadcastNode
     }
 }
 
-fn main() -> Result<()> { main_loop::<_, BroadcastNode, _, _>(()) }
+fn main() -> Result<()> {
+    main_loop::<_, BroadcastNode, _, _>(())
+}
