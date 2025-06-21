@@ -59,7 +59,7 @@ impl Node<(), Payload, InjectedPayload> for BroadcastNode
             loop
             {
                 thread::sleep(Duration::from_millis(250));
-                if let Err(_) = tx.send(Event::Injected(InjectedPayload::Gossip))
+                if tx.send(Event::Injected(InjectedPayload::Gossip)).is_err()
                 {
                     break;
                 }
