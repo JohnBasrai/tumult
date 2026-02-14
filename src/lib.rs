@@ -3,24 +3,21 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::io::{BufRead, StdoutLock, Write};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Message<Payload>
-{
-    pub src:  String,
+pub struct Message<Payload> {
+    pub src: String,
     pub dest: String,
     pub body: Body<Payload>,
 }
 
-impl<Payload> Message<Payload>
-{
-    pub fn into_reply(self, id: Option<&mut usize>) -> Self
-    {
+impl<Payload> Message<Payload> {
+    pub fn into_reply(self, id: Option<&mut usize>) -> Self {
         let msg_id = id.map(|id| {
             let msg_id = *id;
             *id += 1;
             msg_id
         });
         Self {
-            src:  self.dest,
+            src: self.dest,
             dest: self.src,
             body: Body {
                 msg_id,
@@ -41,48 +38,47 @@ impl<Payload> Message<Payload>
 }
 
 #[derive(Debug, Clone)]
-pub enum Event<Payload, InjectedPayload = ()>
-{
+pub enum Event<Payload, InjectedPayload = ()> {
     Message(Message<Payload>),
     Injected(InjectedPayload),
     EOF,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Body<Payload>
-{
-    pub msg_id:      Option<usize>,
+pub struct Body<Payload> {
+    pub msg_id: Option<usize>,
     pub in_reply_to: Option<usize>,
     #[serde(flatten)]
-    pub payload:     Payload,
+    pub payload: Payload,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
-enum InitPayload
-{
+enum InitPayload {
     Init(Init),
     InitOk,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Init
-{
-    pub node_id:  String,
+pub struct Init {
+    pub node_id: String,
     pub node_ids: Vec<String>,
 }
 
-pub trait Node<S, Payload, InjectedPayload = ()>
-{
+pub trait Node<S, Payload, InjectedPayload = ()> {
     fn from_init(
-        state: S, init: Init, inject: std::sync::mpsc::Sender<Event<Payload, InjectedPayload>>,
+        state: S,
+        init: Init,
+        inject: std::sync::mpsc::Sender<Event<Payload, InjectedPayload>>,
     ) -> Result<Self>
     where
         Self: Sized;
 
     fn step(
-        &mut self, input: Event<Payload, InjectedPayload>, output: &mut StdoutLock,
+        &mut self,
+        input: Event<Payload, InjectedPayload>,
+        output: &mut StdoutLock,
     ) -> Result<()>;
 }
 
@@ -105,21 +101,19 @@ where
             .context("EOF before init message-2")?,
     )
     .context("Error deserializing init message")?;
-    let InitPayload::Init(init) = init_msg.body.payload
-    else
-    {
+    let InitPayload::Init(init) = init_msg.body.payload else {
         panic!("Expected init message first");
     };
     let mut node: N =
         Node::from_init(init_state, init, tx.clone()).context("initilization failed")?;
 
     let reply = Message {
-        src:  init_msg.dest,
+        src: init_msg.dest,
         dest: init_msg.src,
         body: Body {
-            msg_id:      Some(0),
+            msg_id: Some(0),
             in_reply_to: init_msg.body.msg_id,
-            payload:     InitPayload::InitOk,
+            payload: InitPayload::InitOk,
         },
     };
     serde_json::to_writer(&mut stdout, &reply).context("serialize init response")?;
@@ -128,13 +122,11 @@ where
     drop(stdin);
     let jh = std::thread::spawn(move || {
         let stdin = std::io::stdin().lock();
-        for line in stdin.lines()
-        {
+        for line in stdin.lines() {
             let line = line.context("Maelstrom input from STDIN could not be read")?;
             let input: Message<P> = serde_json::from_str(&line)
                 .context("Maelstrom input from STDIN could not be deserialized")?;
-            if tx.send(Event::Message(input)).is_err()
-            {
+            if tx.send(Event::Message(input)).is_err() {
                 return Ok::<_, anyhow::Error>(());
             }
         }
@@ -142,8 +134,7 @@ where
         Ok(())
     });
 
-    for input in rx
-    {
+    for input in rx {
         node.step(input, &mut stdout)
             .context("Node step function failed")?;
     }
